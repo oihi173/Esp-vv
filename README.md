@@ -1,156 +1,160 @@
---[[ 
-ESP com destaque vermelho em todos jogadores + modo performance (textura fosca)
-- Coloque como LocalScript em StarterGui.
-- Painel com fundo, botão hambúrguer para mostrar/ocultar, e arrastável horizontalmente.
-]]
-
 local Players = game:GetService("Players")
-local localPlayer = Players.LocalPlayer
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 
--- Painel UI
-local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "ESPPanel"
-screenGui.ResetOnSpawn = false
-screenGui.Parent = localPlayer.PlayerGui
+-- GUI principal
+local gui = Instance.new("ScreenGui")
+gui.Name = "TeleportGUI"
+gui.ResetOnSpawn = false
+gui.IgnoreGuiInset = true
+gui.Parent = playerGui
 
-local panelFrame = Instance.new("Frame", screenGui)
-panelFrame.Size = UDim2.new(0, 170, 0, 140)
-panelFrame.Position = UDim2.new(0, 10, 0, 10)
-panelFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
-panelFrame.BorderSizePixel = 2
-panelFrame.BorderColor3 = Color3.fromRGB(200,0,0)
-panelFrame.Active = true
-panelFrame.Draggable = false -- Usaremos drag customizado
+local tweenInfo = TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
 
-local titleLabel = Instance.new("TextLabel", panelFrame)
-titleLabel.Size = UDim2.new(1, 0, 0, 30)
-titleLabel.Position = UDim2.new(0, 0, 0, 0)
-titleLabel.Text = "Painel ESP"
-titleLabel.BackgroundTransparency = 1
-titleLabel.TextColor3 = Color3.new(1,1,1)
-titleLabel.Font = Enum.Font.SourceSansBold
-titleLabel.TextSize = 20
+-- Lista de teleportes
+local teleports = {
+    {name = "Local 1", pos = Vector3.new(4009.78, 21.37, -6705.96)},
+    {name = "Local 2", pos = Vector3.new(4125.84, 37.00, -6733.84)},
+    {name = "Local 3", pos = Vector3.new(4124.55, 21.37, -6744.80)},
+    {name = "Local 4", pos = Vector3.new(3953.47, 21.00, -6689.76)}
+}
 
-local hamburgerBtn = Instance.new("TextButton", panelFrame)
-hamburgerBtn.Size = UDim2.new(0, 30, 0, 30)
-hamburgerBtn.Position = UDim2.new(1, -35, 0, 0)
-hamburgerBtn.Text = "≡"
-hamburgerBtn.BackgroundColor3 = Color3.fromRGB(60,60,60)
-hamburgerBtn.TextColor3 = Color3.new(1,1,1)
-hamburgerBtn.BorderSizePixel = 0
+-- Painel principal (base)
+local frame = Instance.new("Frame")
+frame.Size = UDim2.new(0,260,0,60)
+frame.Position = UDim2.new(0.5,-130,0.7,0)
+frame.AnchorPoint = Vector2.new(0.5,0)
+frame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+frame.BackgroundTransparency = 0.15
+frame.BorderSizePixel = 0
+frame.ClipsDescendants = true
+frame.Parent = gui
+Instance.new("UICorner", frame).CornerRadius = UDim.new(0,12)
 
-local contentFrame = Instance.new("Frame", panelFrame)
-contentFrame.Size = UDim2.new(1, -10, 1, -40)
-contentFrame.Position = UDim2.new(0, 5, 0, 35)
-contentFrame.BackgroundTransparency = 1
+-- Botão abrir/fechar
+local openBtn = Instance.new("TextButton")
+openBtn.Size = UDim2.new(0,36,0,36)
+openBtn.Position = UDim2.new(1,-42,0,12)
+openBtn.AnchorPoint = Vector2.new(1,0)
+openBtn.Text = "+"
+openBtn.Font = Enum.Font.SourceSansBold
+openBtn.TextScaled = true
+openBtn.BackgroundTransparency = 0.1
+openBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+openBtn.TextColor3 = Color3.new(1,1,1)
+openBtn.Parent = frame
+Instance.new("UICorner", openBtn).CornerRadius = UDim.new(0,8)
 
-local espButton = Instance.new("TextButton", contentFrame)
-espButton.Size = UDim2.new(1, 0, 0, 40)
-espButton.Position = UDim2.new(0, 0, 0, 0)
-espButton.Text = "Ativar ESP"
-espButton.BackgroundColor3 = Color3.fromRGB(200,0,0)
-espButton.TextColor3 = Color3.new(1,1,1)
-espButton.Font = Enum.Font.SourceSansBold
-espButton.TextSize = 18
+-- ScrollingFrame
+local listFrame = Instance.new("ScrollingFrame")
+listFrame.Size = UDim2.new(1,0,0,250)
+listFrame.Position = UDim2.new(0,0,0,60)
+listFrame.BackgroundTransparency = 1
+listFrame.BorderSizePixel = 0
+listFrame.ScrollBarThickness = 6
+listFrame.Visible = false
+listFrame.Parent = frame
+listFrame.CanvasSize = UDim2.new(0,0,0,#teleports*46 + 50)
+local layout = Instance.new("UIListLayout", listFrame)
+layout.SortOrder = Enum.SortOrder.LayoutOrder
+layout.Padding = UDim.new(0,6)
 
-local fosButton = Instance.new("TextButton", contentFrame)
-fosButton.Size = UDim2.new(1, 0, 0, 40)
-fosButton.Position = UDim2.new(0, 0, 0, 50)
-fosButton.Text = "Modo Mais Fos"
-fosButton.BackgroundColor3 = Color3.fromRGB(100,100,100)
-fosButton.TextColor3 = Color3.new(1,1,1)
-fosButton.Font = Enum.Font.SourceSansBold
-fosButton.TextSize = 18
-
--- Mostrar/esconder painel
-local panelVisible = true
-hamburgerBtn.MouseButton1Click:Connect(function()
-    panelVisible = not panelVisible
-    contentFrame.Visible = panelVisible
-    espButton.Visible = panelVisible
-    fosButton.Visible = panelVisible
-end)
-
--- Arrastar painel horizontalmente pelo titleLabel
-local dragging = false
-local dragStart = nil
-local startPos = nil
-
-titleLabel.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        dragStart = input.Position
-        startPos = panelFrame.Position
+-- Função Teleporte (suporta cadeira)
+local function teleportTo(pos)
+    local char = player.Character or player.CharacterAdded:Wait()
+    local hrp = char:WaitForChild("HumanoidRootPart")
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    if humanoid.SeatPart then
+        local seat = humanoid.SeatPart
+        TweenService:Create(seat, tweenInfo, {CFrame = CFrame.new(pos + Vector3.new(0,3,0))}):Play()
+    else
+        TweenService:Create(hrp, tweenInfo, {CFrame = CFrame.new(pos + Vector3.new(0,3,0))}):Play()
     end
-end)
-titleLabel.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = false
-    end
-end)
+end
 
-game:GetService("UserInputService").InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.MouseMovement then
-        local delta = input.Position - dragStart
-        panelFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset)
-    end
-end)
+-- Auto Teleport
+local autoTeleporting = false
+local autoDelay = 0.5 -- meio segundo entre cada clique
 
-local espActive = false
-local fosActive = false
+local autoBtn = Instance.new("TextButton")
+autoBtn.Size = UDim2.new(1,-12,0,40)
+autoBtn.Position = UDim2.new(0,6,0,(#teleports*46)+10)
+autoBtn.BackgroundTransparency = 0.08
+autoBtn.BackgroundColor3 = Color3.fromRGB(80,50,50)
+autoBtn.BorderSizePixel = 0
+autoBtn.Text = "Auto Teleport: OFF"
+autoBtn.Font = Enum.Font.SourceSansBold
+autoBtn.TextSize = 18
+autoBtn.TextColor3 = Color3.new(1,1,1)
+autoBtn.Parent = listFrame
+Instance.new("UICorner", autoBtn).CornerRadius = UDim.new(0,8)
 
--- Função ESP: pega TODOS jogadores
-function updateESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= localPlayer then
-            local character = player.Character
-            if character then
-                if not character:FindFirstChild("EnemyESPHighlight") then
-                    local highlight = Instance.new("Highlight", character)
-                    highlight.Name = "EnemyESPHighlight"
-                    highlight.FillColor = Color3.fromRGB(255,0,0)
-                    highlight.OutlineColor = Color3.fromRGB(255,0,0)
-                    highlight.Enabled = espActive
-                else
-                    character.EnemyESPHighlight.Enabled = espActive
+autoBtn.MouseButton1Click:Connect(function()
+    autoTeleporting = not autoTeleporting
+    autoBtn.Text = "Auto Teleport: "..(autoTeleporting and "ON" or "OFF")
+    if autoTeleporting then
+        task.spawn(function()
+            while autoTeleporting do
+                for _, info in ipairs(teleports) do
+                    if not autoTeleporting then break end
+                    for i=1,3 do -- 3 cliques antes de ir pro próximo
+                        if not autoTeleporting then break end
+                        teleportTo(info.pos)
+                        task.wait(autoDelay)
+                    end
                 end
             end
-        end
+        end)
+    end
+end)
+
+-- Abrir/fechar painel
+local open = false
+openBtn.MouseButton1Click:Connect(function()
+    open = not open
+    if open then
+        TweenService:Create(frame, TweenInfo.new(0.25), {Size=UDim2.new(0,260,0,360)}):Play()
+        listFrame.Visible = true
+        openBtn.Text = "×"
+    else
+        TweenService:Create(frame, TweenInfo.new(0.25), {Size=UDim2.new(0,260,0,60)}):Play()
+        task.delay(0.26,function() listFrame.Visible = false end)
+        openBtn.Text = "+"
+    end
+end)
+
+-- Drag
+local dragging, dragStart, startPos
+local function updateDrag(input)
+    if dragging then
+        local delta = input.Position - dragStart
+        frame.Position = UDim2.new(
+            0, math.clamp(startPos.X.Offset + delta.X,0,gui.AbsoluteSize.X - frame.Size.X.Offset),
+            0, math.clamp(startPos.Y.Offset + delta.Y,0,gui.AbsoluteSize.Y - frame.Size.Y.Offset)
+        )
     end
 end
-
--- Função para modo "fosco" (baixo textura)
-function setLowTexture()
-    for _, v in pairs(workspace:GetDescendants()) do
-        if v:IsA("Texture") or v:IsA("Decal") then
-            v.Transparency = fosActive and 0.7 or 0
-        end
+frame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = frame.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End or input.UserInputState == Enum.UserInputState.Cancel then
+                dragging = false
+            end
+        end)
     end
-end
-
-espButton.MouseButton1Click:Connect(function()
-    espActive = not espActive
-    espButton.Text = espActive and "Desativar ESP" or "Ativar ESP"
-    updateESP()
 end)
-
-fosButton.MouseButton1Click:Connect(function()
-    fosActive = not fosActive
-    fosButton.Text = fosActive and "Desativar Modo Fos" or "Modo Mais Fos"
-    setLowTexture()
+frame.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
+        updateDrag(input)
+    end
 end)
-
-Players.PlayerAdded:Connect(function(plr)
-    plr.CharacterAdded:Connect(function()
-        updateESP()
-    end)
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType==Enum.UserInputType.MouseMovement or input.UserInputType==Enum.UserInputType.Touch) then
+        updateDrag(input)
+    end
 end)
-Players.PlayerRemoving:Connect(function(plr)
-    updateESP()
-end)
-
--- Atualiza ESP periodicamente
-while true do
-    updateESP()
-    wait(2)
-end
